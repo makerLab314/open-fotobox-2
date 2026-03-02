@@ -8,5 +8,7 @@
   "image_dir": "/media/usb",
   "show_led_setup": false,
   "force_image_dir_mountpoint": 1,
-  "fullscreen": true
+  "fullscreen": true,
+  "wifi_ssid": "FotoBox",
+  "wifi_password": "fotobox2024"
 }

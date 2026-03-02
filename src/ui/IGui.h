@@ -27,7 +27,8 @@ namespace selfomat {
             STATE_FINAL_IMAGE_PRINT_CONFIRMED,
             STATE_TRANS_PRINT_PREV1,
             STATE_TRANS_PREV1_PREV2,
-            STATE_TRANS_PREV2_PREV3
+            STATE_TRANS_PREV2_PREV3,
+            STATE_SHARE_QR
         };
 
         enum ALERT_TYPE {
@@ -80,6 +81,8 @@ namespace selfomat {
             virtual void confirmPrint() = 0;
 
             virtual void setDebugOutput(bool debug) = 0;
+
+            virtual void setShareInfo(const std::string &wifiSSID, const std::string &wifiPassword, const std::string &shareUrl) = 0;
 
             const boost::unordered_map<ALERT_TYPE,const char*> alertTypeToString = boost::assign::map_list_of
                     (ALERT_CAMERA, "C")

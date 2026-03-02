@@ -3,6 +3,7 @@
 //
 
 #include "BoothApi.h"
+#include <boost/filesystem.hpp>
 
 using namespace selfomat::api;
 using namespace xtech::selfomat;
@@ -930,6 +931,132 @@ bool BoothApi::start() {
                     res.set_status(301);
                     res.set_header("Location", "/app/index.html");
                 }
+            });
+
+    // ── Photo gallery endpoints ────────────────────────────────────────────
+    // GET /gallery  →  simple HTML download page
+    mux.handle("/gallery")
+            .get([this](served::response &res, const served::request &req) {
+                res.set_header("Content-Type", "text/html; charset=UTF-8");
+                res.set_status(200);
+                res.set_body(R"html(<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FotoBox – Fotos herunterladen</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#111;color:#eee;font-family:sans-serif;padding:20px}
+  h1{text-align:center;margin-bottom:20px;font-size:1.6rem;color:#fff}
+  .grid{display:flex;flex-wrap:wrap;gap:14px;justify-content:center}
+  .card{background:#222;border-radius:12px;overflow:hidden;width:180px;text-align:center}
+  .card img{width:100%;display:block}
+  .card a{display:block;padding:8px;color:#7dcfb6;text-decoration:none;font-size:.8rem;word-break:break-all}
+  .card a:hover{color:#fff}
+  #msg{text-align:center;margin-top:40px;color:#888}
+</style>
+</head>
+<body>
+<h1>&#128247; FotoBox Fotos</h1>
+<div class="grid" id="grid"></div>
+<p id="msg">Lade Fotos&#8230;</p>
+<script>
+fetch('/photos')
+  .then(function(r){return r.json()})
+  .then(function(files){
+    var grid=document.getElementById('grid');
+    var msg=document.getElementById('msg');
+    if(!files||files.length===0){msg.textContent='Noch keine Fotos vorhanden.';return}
+    msg.textContent='';
+    files.forEach(function(f){
+      var card=document.createElement('div');
+      card.className='card';
+      card.innerHTML='<a href="/photos/'+encodeURIComponent(f)+'" download><img src="/photos/'+encodeURIComponent(f)+'" loading="lazy" alt="'+f+'"><span>'+f+'</span></a>';
+      grid.appendChild(card);
+    });
+  })
+  .catch(function(){document.getElementById('msg').textContent='Fehler beim Laden.';});
+</script>
+</body>
+</html>)html");
+            });
+
+    // GET /photos  →  JSON array of filenames
+    mux.handle("/photos")
+            .get([this](served::response &res, const served::request &req) {
+                std::string dir = logic->getImageDir();
+                res.set_header("Content-Type", "application/json");
+                if (dir.empty() || !boost::filesystem::exists(dir)) {
+                    res.set_status(200);
+                    res.set_body("[]");
+                    return;
+                }
+                // Helper to JSON-escape a string
+                auto jsonEscape = [](const std::string &s) {
+                    std::string out;
+                    out.reserve(s.size() + 4);
+                    for (char c : s) {
+                        if (c == '"' || c == '\\') out += '\\';
+                        out += c;
+                    }
+                    return out;
+                };
+                std::string json = "[";
+                bool first = true;
+                try {
+                    for (auto &entry : boost::filesystem::directory_iterator(dir)) {
+                        auto ext = entry.path().extension().string();
+                        if (ext == ".jpg" || ext == ".JPG" || ext == ".jpeg" || ext == ".JPEG"
+                            || ext == ".png" || ext == ".PNG") {
+                            if (!first) json += ",";
+                            std::string name = entry.path().filename().string();
+                            json += "\"" + jsonEscape(name) + "\"";
+                            first = false;
+                        }
+                    }
+                } catch (...) {}
+                json += "]";
+                res.set_status(200);
+                res.set_body(json);
+            });
+
+    // GET /photos/{file}  →  serve a single photo
+    mux.handle("/photos/{file}")
+            .get([this](served::response &res, const served::request &req) {
+                std::string dir = logic->getImageDir();
+                std::string filename = req.params["file"];
+                // Path-traversal guard: resolve canonical path and ensure it stays within imageDir
+                boost::filesystem::path resolvedDir = boost::filesystem::canonical(dir);
+                boost::filesystem::path candidate   = boost::filesystem::absolute(
+                    boost::filesystem::path(dir) / filename);
+                try {
+                    candidate = boost::filesystem::canonical(candidate);
+                } catch (...) {
+                    served::response::stock_reply(404, res);
+                    return;
+                }
+                // Ensure resolved path starts with the image directory
+                auto dirStr = resolvedDir.string() + "/";
+                auto candStr = candidate.string();
+                if (candStr.substr(0, dirStr.size()) != dirStr) {
+                    served::response::stock_reply(403, res);
+                    return;
+                }
+                ifstream f(candidate.string(), ios::binary | ios::in);
+                if (!f.is_open()) {
+                    served::response::stock_reply(404, res);
+                    return;
+                }
+                std::string ext = candidate.extension().string();
+                std::string ct = "image/jpeg";
+                if (ext == ".png" || ext == ".PNG") ct = "image/png";
+                res.set_header("Content-Type", ct);
+                res.set_header("Content-Disposition",
+                               "attachment; filename=\"" + candidate.filename().string() + "\"");
+                string body{istreambuf_iterator<char>(f), istreambuf_iterator<char>()};
+                res.set_status(200);
+                res.set_body(body);
             });
 
     // Create the server and run with 2 handler thread.

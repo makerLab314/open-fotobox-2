@@ -25,11 +25,23 @@
 
 #include "spdlog/sinks/ringbuffer_sink.h"
 
+#ifdef HAVE_QRENCODE
+#include <qrencode.h>
+#endif
+
 #define DEBUG_QUEUE_SIZE 20
 
-#define COLOR_MAIN          sf::Color(20, 64, 66, 255)
-#define COLOR_MAIN_LIGHT    sf::Color(155, 194, 189)
-#define COLOR_ALERT         sf::Color(200, 0, 0)
+// Modern color palette
+#define COLOR_BG            sf::Color(18, 18, 24, 255)
+#define COLOR_SURFACE       sf::Color(30, 30, 42, 255)
+#define COLOR_PRIMARY       sf::Color(100, 210, 180, 255)
+#define COLOR_PRIMARY_DARK  sf::Color(60, 160, 130, 255)
+#define COLOR_DANGER        sf::Color(230, 75, 75, 255)
+#define COLOR_TEXT          sf::Color(240, 240, 245, 255)
+#define COLOR_TEXT_DIM      sf::Color(150, 150, 165, 255)
+#define COLOR_MAIN          sf::Color(100, 210, 180, 255)
+#define COLOR_MAIN_LIGHT    sf::Color(155, 210, 195, 200)
+#define COLOR_ALERT         sf::Color(230, 75, 75, 255)
 
 namespace selfomat {
     namespace ui {
@@ -60,6 +72,16 @@ namespace selfomat {
             bool templateEnabled;
 
             bool shouldShowAgreement;
+
+            // Share / QR info
+            bool shouldShowQR = false;
+            std::string shareUrl;
+            std::string wifiSSID;
+            std::string wifiPassword;
+            sf::Texture qrWifiTexture;
+            sf::Texture qrUrlTexture;
+            bool qrWifiReady  = false;
+            bool qrUrlReady   = false;
 
             GUI_STATE currentState;
             sf::Clock stateTimer;
@@ -126,10 +148,21 @@ namespace selfomat {
 
             float easeOutSin(float t, float b, float c, float d);
 
-            void drawPrintOverlay(float percentage = 1.0f);
+            void drawShareButtons(float percentage = 1.0f);
+            void drawShareQR(float alpha = 1.0f);
             void drawAlerts();
             void drawAgreement(float alpha = 1);
             void drawDebug();
+            void drawRoundedRect(sf::RenderTarget &target, float x, float y, float w, float h,
+                                 float radius, sf::Color fill);
+
+            bool isFertigButton(int mouseX, int mouseY);
+            bool isNochmalButton(int mouseX, int mouseY);
+
+            void generateQRTextures();
+#ifdef HAVE_QRENCODE
+            static sf::Texture buildQRTexture(const std::string &text, int modulePixels = 8);
+#endif
 
             void removeAlert(ALERT_TYPE type, bool forced);
 
@@ -173,9 +206,10 @@ namespace selfomat {
             }
 
             void notifyPreviewIncoming() override {
-                if(currentState == STATE_BLACK) {
-                    // We're before the final image but we get a new preview - there seems to be an error.
-                    // Go fade to live
+                if (shouldShowQR) {
+                    shouldShowQR = false;
+                    setState(STATE_SHARE_QR);
+                } else if(currentState == STATE_BLACK) {
                     setState(STATE_TRANS_PREV2_PREV3);
                 } else {
                     setState(STATE_TRANS_PRINT_PREV1);
@@ -194,6 +228,12 @@ namespace selfomat {
 
             void cancelPrint() override;
             void confirmPrint() override;
+
+            void setShareInfo(const std::string &ssid, const std::string &password, const std::string &url) override {
+                wifiSSID    = ssid;
+                wifiPassword = password;
+                shareUrl    = url;
+            }
 
             ~BoothGui();
 

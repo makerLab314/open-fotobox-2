@@ -8,5 +8,7 @@
   "image_dir": "/tmp",
   "show_led_setup": false,
   "force_image_dir_mountpoint": 0,
-  "fullscreen": false
+  "fullscreen": false,
+  "wifi_ssid": "FotoBox",
+  "wifi_password": "fotobox2024"
 }
