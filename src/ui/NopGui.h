@@ -18,6 +18,8 @@ namespace selfomat {
 
             void stop() override;
 
+            void reloadTemplate() override {};
+
             void updatePreviewImage(void *data, uint32_t width, uint32_t height) override;
 
             void hidePreviewImage() override;
@@ -26,6 +28,10 @@ namespace selfomat {
 
             void notifyPreviewIncoming() override;
 
+            void showAgreement() override {};
+            void hideAgreement() override {};
+
+            bool hasAlert(ALERT_TYPE type) override { return false; };
 
             void addAlert(ALERT_TYPE type, std::wstring text, bool autoRemove, bool isHint) override;
 
@@ -34,6 +40,12 @@ namespace selfomat {
             void setPrinterEnabled(bool printerEnabled) override;
 
             void setTemplateEnabled(bool templateEnabled) override;
+
+            void cancelPrint() override {};
+            void confirmPrint() override {};
+            void setDebugOutput(bool debug) override {};
+
+            void setShareInfo(const std::string &wifiSSID, const std::string &wifiPassword, const std::string &shareUrl) override {};
 
             const GUI_STATE getCurrentGuiState() override;
         };

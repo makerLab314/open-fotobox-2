@@ -118,7 +118,10 @@ namespace selfomat {
             bool force_image_dir_mountpoint;
 
             int returnCode = 0;
-            string imageDir;
+            std::string imageDir;
+
+            std::string wifiSSID;
+            std::string wifiPassword;
 
             bool has_button, has_flash, disable_watchdog;
             // hint to how the controller port might be called
@@ -295,6 +298,16 @@ namespace selfomat {
             void setLanguageChoice(int choice, bool persist = false);
 
             std::wstring getTranslation(std::string id);
+
+            std::string getImageDir() const { return imageDir; }
+            std::string getWifiSSID() const { return wifiSSID; }
+            std::string getWifiPassword() const { return wifiPassword; }
+            std::string getLocalIP() const;
+
+            void setWifiInfo(const std::string &ssid, const std::string &password) {
+                wifiSSID = ssid;
+                wifiPassword = password;
+            }
         };
 
     }

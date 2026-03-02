@@ -5,6 +5,10 @@
 
 #include "spdlog/sinks/dist_sink.h"
 
+#include <ifaddrs.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 using namespace std;
 using namespace selfomat::logic;
 using namespace selfomat::camera;
@@ -35,6 +39,12 @@ bool BoothLogic::start() {
         gui->showAgreement();
         selfomatController.showAgreement();
     }
+
+    // Set share info (WiFi QR + download URL) for the GUI
+    std::string localIP = getLocalIP();
+    std::string shareUrl = "http://" + localIP + ":9080/gallery";
+    gui->setShareInfo(wifiSSID, wifiPassword, shareUrl);
+    LOG_I(TAG, "Share URL: ", shareUrl);
 
     LOG_D(TAG, "Initializing Image Processor");
     if (!imageProcessor.start())
@@ -1008,4 +1018,21 @@ void BoothLogic::setAutofocusBeforeTrigger(bool newValue, bool persist) {
 
 std::wstring BoothLogic::getTranslation(std::string id) {
     return converter.from_bytes(locale.get<string>(id));
+}
+
+std::string BoothLogic::getLocalIP() const {
+    struct ifaddrs *ifap = nullptr, *ifa = nullptr;
+    if (getifaddrs(&ifap) != 0) return "127.0.0.1";
+    std::string result = "127.0.0.1";
+    for (ifa = ifap; ifa != nullptr; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_addr) continue;
+        if (ifa->ifa_addr->sa_family != AF_INET) continue;
+        auto *addr = reinterpret_cast<struct sockaddr_in *>(ifa->ifa_addr);
+        std::string ip = inet_ntoa(addr->sin_addr);
+        if (ip == "127.0.0.1") continue;
+        result = ip;
+        break;
+    }
+    freeifaddrs(ifap);
+    return result;
 }

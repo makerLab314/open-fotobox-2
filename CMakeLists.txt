@@ -29,6 +29,18 @@ endif()
 find_package(Cups REQUIRED)
 find_package(Protobuf REQUIRED)
 
+# Optional: QR code support via libqrencode
+find_package(PkgConfig)
+if(PkgConfig_FOUND)
+    pkg_check_modules(QRENCODE libqrencode)
+endif()
+if(QRENCODE_FOUND)
+    message("libqrencode found - QR code display enabled")
+    add_definitions(-DHAVE_QRENCODE)
+else()
+    message("libqrencode NOT found - QR codes will show placeholder boxes")
+endif()
+
 include_directories(src)
 include_directories(dependencies)
 include_directories(/usr/include/gphoto2)
@@ -90,6 +102,11 @@ target_link_libraries(self_o_mat.app ${Boost_LIBRARIES}
         protobuf
         spdlog::spdlog
 )
+
+if(QRENCODE_FOUND)
+    target_include_directories(self_o_mat.app PRIVATE ${QRENCODE_INCLUDE_DIRS})
+    target_link_libraries(self_o_mat.app ${QRENCODE_LIBRARIES})
+endif()
 
 add_executable(filter_test src/main_filter.cpp src/logic/filters/IImageFilter.h src/logic/filters/BasicImageFilter.cpp src/logic/filters/BasicImageFilter.h src/logic/filters/IImageFilter.cpp)
 target_link_libraries(filter_test ${Boost_LIBRARIES})

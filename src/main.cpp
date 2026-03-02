@@ -146,6 +146,8 @@ int main(int argc, char *argv[]) {
     bool fullscreen = true;
     string button_port_name;
     string image_dir;
+    string wifi_ssid = "FotoBox";
+    string wifi_password = "fotobox2024";
 
 
 
@@ -170,6 +172,8 @@ int main(int argc, char *argv[]) {
         force_image_dir_mountpoint = ptree.get<bool>("force_image_dir_mountpoint", true);
         autofocus_before_trigger = ptree.get<bool>("autofocus_before_trigger", false);
         fullscreen = ptree.get<bool>("fullscreen", true);
+        wifi_ssid = ptree.get<string>("wifi_ssid", "FotoBox");
+        wifi_password = ptree.get<string>("wifi_password", "fotobox2024");
     } catch (boost::exception &e) {
         LOG_E(TAG, "Error loading properties. Using defaults.");
     }
@@ -203,6 +207,7 @@ int main(int argc, char *argv[]) {
     LOG_I(TAG, "Started Camera");
 
     p_logic = new logic::BoothLogic(p_cam, p_gui, has_button, button_port_name, has_flash, image_dir, force_image_dir_mountpoint, disable_watchdog, show_led_setup, autofocus_before_trigger);
+    p_logic->setWifiInfo(wifi_ssid, wifi_password);
 
     LOG_I(TAG, "Started Logic");
 
