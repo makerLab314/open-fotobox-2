@@ -57,3 +57,4 @@ filter_test_output
 
 scaled.jpg
 filtered.jpg
+_codeql_detected_source_root
