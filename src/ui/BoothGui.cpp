@@ -566,7 +566,7 @@ void BoothGui::drawShareButtons(float percentage)
     fertigLabel.setFont(mainFont);
     fertigLabel.setCharacterSize(32);
     fertigLabel.setFillColor(sf::Color(255, 255, 255, alpha));
-    fertigLabel.setString(L"Fertig \u2713");
+    fertigLabel.setString(L"Fertig  >>");
     auto fb = fertigLabel.getLocalBounds();
     fertigLabel.setPosition(fertigX + (fertigW - fb.width) / 2.f,
                              btnY + (btnH - fb.height) / 2.f - 4.f);

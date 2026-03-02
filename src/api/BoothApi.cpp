@@ -992,18 +992,26 @@ fetch('/photos')
                     res.set_body("[]");
                     return;
                 }
+                // Helper to JSON-escape a string
+                auto jsonEscape = [](const std::string &s) {
+                    std::string out;
+                    out.reserve(s.size() + 4);
+                    for (char c : s) {
+                        if (c == '"' || c == '\\') out += '\\';
+                        out += c;
+                    }
+                    return out;
+                };
                 std::string json = "[";
                 bool first = true;
                 try {
                     for (auto &entry : boost::filesystem::directory_iterator(dir)) {
                         auto ext = entry.path().extension().string();
-                        // include JPEGs and common raw formats
                         if (ext == ".jpg" || ext == ".JPG" || ext == ".jpeg" || ext == ".JPEG"
                             || ext == ".png" || ext == ".PNG") {
                             if (!first) json += ",";
                             std::string name = entry.path().filename().string();
-                            // simple JSON string escaping
-                            json += "\"" + name + "\"";
+                            json += "\"" + jsonEscape(name) + "\"";
                             first = false;
                         }
                     }
@@ -1018,22 +1026,34 @@ fetch('/photos')
             .get([this](served::response &res, const served::request &req) {
                 std::string dir = logic->getImageDir();
                 std::string filename = req.params["file"];
-                // Basic path-traversal guard
-                if (filename.find('/') != std::string::npos || filename.find("..") != std::string::npos) {
-                    served::response::stock_reply(400, res);
+                // Path-traversal guard: resolve canonical path and ensure it stays within imageDir
+                boost::filesystem::path resolvedDir = boost::filesystem::canonical(dir);
+                boost::filesystem::path candidate   = boost::filesystem::absolute(
+                    boost::filesystem::path(dir) / filename);
+                try {
+                    candidate = boost::filesystem::canonical(candidate);
+                } catch (...) {
+                    served::response::stock_reply(404, res);
                     return;
                 }
-                std::string fullPath = dir + "/" + filename;
-                ifstream f(fullPath, ios::binary | ios::in);
+                // Ensure resolved path starts with the image directory
+                auto dirStr = resolvedDir.string() + "/";
+                auto candStr = candidate.string();
+                if (candStr.substr(0, dirStr.size()) != dirStr) {
+                    served::response::stock_reply(403, res);
+                    return;
+                }
+                ifstream f(candidate.string(), ios::binary | ios::in);
                 if (!f.is_open()) {
                     served::response::stock_reply(404, res);
                     return;
                 }
-                std::string ext = boost::filesystem::path(filename).extension().string();
+                std::string ext = candidate.extension().string();
                 std::string ct = "image/jpeg";
                 if (ext == ".png" || ext == ".PNG") ct = "image/png";
                 res.set_header("Content-Type", ct);
-                res.set_header("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+                res.set_header("Content-Disposition",
+                               "attachment; filename=\"" + candidate.filename().string() + "\"");
                 string body{istreambuf_iterator<char>(f), istreambuf_iterator<char>()};
                 res.set_status(200);
                 res.set_body(body);

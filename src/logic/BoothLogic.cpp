@@ -44,7 +44,7 @@ bool BoothLogic::start() {
     std::string localIP = getLocalIP();
     std::string shareUrl = "http://" + localIP + ":9080/gallery";
     gui->setShareInfo(wifiSSID, wifiPassword, shareUrl);
-    LOG_I(TAG, "Share URL: ", shareUrl);
+    LOG_I(TAG, "Share URL: " + shareUrl);
 
     LOG_D(TAG, "Initializing Image Processor");
     if (!imageProcessor.start())
@@ -1024,11 +1024,13 @@ std::string BoothLogic::getLocalIP() const {
     struct ifaddrs *ifap = nullptr, *ifa = nullptr;
     if (getifaddrs(&ifap) != 0) return "127.0.0.1";
     std::string result = "127.0.0.1";
+    char buf[INET_ADDRSTRLEN];
     for (ifa = ifap; ifa != nullptr; ifa = ifa->ifa_next) {
         if (!ifa->ifa_addr) continue;
         if (ifa->ifa_addr->sa_family != AF_INET) continue;
         auto *addr = reinterpret_cast<struct sockaddr_in *>(ifa->ifa_addr);
-        std::string ip = inet_ntoa(addr->sin_addr);
+        if (inet_ntop(AF_INET, &addr->sin_addr, buf, sizeof(buf)) == nullptr) continue;
+        std::string ip = buf;
         if (ip == "127.0.0.1") continue;
         result = ip;
         break;
