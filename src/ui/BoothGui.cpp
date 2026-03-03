@@ -124,7 +124,7 @@ bool BoothGui::isInButtonBar(int my)
 
 // --- Constructor / Destructor ----------------------------------------------
 BoothGui::BoothGui(bool fullscreen, bool debug, logic::ILogicController *logicController) {
-    videoMode = sf::VideoMode(1280, 800);
+    videoMode = fullscreen ? sf::VideoMode::getDesktopMode() : sf::VideoMode(1280, 800);
     this->currentState = STATE_INIT;
     this->shouldShowAgreement = false;
     this->debug = debug;
@@ -356,6 +356,7 @@ void BoothGui::renderThread() {
                 float scaleY = (float)window.getSize().y / (float)imageHeight;
                 float scale  = std::max(scaleX, scaleY);
 
+                imageSprite.setTextureRect(sf::IntRect(0, 0, imageWidth, imageHeight));
                 imageSprite.setScale(-scale, scale);
 
                 float wCX = window.getSize().x / 2.0f;
@@ -507,6 +508,9 @@ void BoothGui::renderThread() {
         } break;
 
         case STATE_SHARE_QR: {
+            if ((!qrWifiReady && !wifiSSID.empty()) ||
+                (!qrUrlReady && !shareUrl.empty()))
+                generateQRTextures();
             float t = stateTimer.getElapsedTime().asMilliseconds();
             drawShareQR(std::min(1.0f, t / 400.0f));
         } break;
@@ -690,6 +694,12 @@ void BoothGui::drawShareQR(float alpha)
 
     // WiFi QR card
     {
+        // Drop shadow
+        float sOff = 6.f;
+        uint8_t sAlpha = (uint8_t)(alpha * 120.f);
+        drawRoundedRect(window, startX + sOff, cardY + sOff, cardW, cardH, 16.f,
+                        sf::Color(0, 0, 0, sAlpha));
+
         drawRoundedRect(window, startX, cardY, cardW, cardH, 16.f,
                         sf::Color(30, 32, 44, a8));
 
@@ -736,6 +746,12 @@ void BoothGui::drawShareQR(float alpha)
     // Download URL QR card
     float card2X = startX + cardW + gap;
     {
+        // Drop shadow
+        float sOff = 6.f;
+        uint8_t sAlpha = (uint8_t)(alpha * 120.f);
+        drawRoundedRect(window, card2X + sOff, cardY + sOff, cardW, cardH, 16.f,
+                        sf::Color(0, 0, 0, sAlpha));
+
         drawRoundedRect(window, card2X, cardY, cardW, cardH, 16.f,
                         sf::Color(30, 32, 44, a8));
 
