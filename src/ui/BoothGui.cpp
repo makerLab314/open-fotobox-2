@@ -115,6 +115,13 @@ bool BoothGui::isNochmalButton(int mx, int my)
            my >= btnY && my <= btnY + btnH;
 }
 
+bool BoothGui::isInButtonBar(int my)
+{
+    float winH = (float)window.getSize().y;
+    float barH = 120.f;
+    return my >= (winH - barH);
+}
+
 // --- Constructor / Destructor ----------------------------------------------
 BoothGui::BoothGui(bool fullscreen, bool debug, logic::ILogicController *logicController) {
     videoMode = sf::VideoMode(1280, 800);
@@ -227,6 +234,16 @@ void BoothGui::renderThread() {
     window.setVerticalSyncEnabled(true);
     window.setFramerateLimit(60);
 
+    // Ensure the view matches the actual window size so that drawing
+    // coordinates and mouse-event pixel coordinates use the same space.
+    {
+        auto ws = window.getSize();
+        sf::View view(sf::FloatRect(0, 0, (float)ws.x, (float)ws.y));
+        window.setView(view);
+        // Re-create rect_overlay with the real window dimensions
+        rect_overlay = sf::RectangleShape(sf::Vector2f((float)ws.x, (float)ws.y));
+    }
+
     clearColor = COLOR_BG;
 
     debugText.setFont(hackFont);
@@ -273,6 +290,15 @@ void BoothGui::renderThread() {
 
                 int mx = event.mouseButton.x;
                 int my = event.mouseButton.y;
+
+                // Convert pixel coordinates to world coordinates so that
+                // hit-tests match the drawn positions even when the view
+                // differs from the window pixel size.
+                sf::Vector2f world = window.mapPixelToCoords(
+                    sf::Vector2i(mx, my));
+                int wx = (int)world.x;
+                int wy = (int)world.y;
+
                 auto state = getCurrentGuiState();
 
                 if (logicController->isAgreementVisible()) {
@@ -287,17 +313,24 @@ void BoothGui::renderThread() {
                            state == STATE_FINAL_IMAGE_PRINT_CANCELED ||
                            state == STATE_FINAL_IMAGE_PRINT_CONFIRMED ||
                            state == STATE_FINAL_IMAGE) {
-                    if (isFertigButton(mx, my)) {
+                    if (isFertigButton(wx, wy)) {
                         shouldShowQR = true;
                         logicController->cancelPrint();
-                    } else if (isNochmalButton(mx, my)) {
+                    } else if (isNochmalButton(wx, wy)) {
                         logicController->cancelPrint();
                     }
                     // else: touch elsewhere during photo review -> ignore
 
                 } else if (state == STATE_LIVE_PREVIEW) {
-                    if (isFertigButton(mx, my)) {
+                    if (isFertigButton(wx, wy)) {
                         setState(STATE_SHARE_QR);
+                    } else if (isNochmalButton(wx, wy)) {
+                        // In live preview, this is the "Foto!" trigger button
+                        logicController->trigger();
+                    } else if (isInButtonBar(wy)) {
+                        // Touch is inside the bottom bar but not on a button;
+                        // ignore it so that accidental bar taps don't trigger
+                        // a photo.
                     } else {
                         logicController->trigger();
                     }
@@ -330,7 +363,7 @@ void BoothGui::renderThread() {
                 float iCX = (float)imageWidth  * scale * 0.5f;
                 float iCY = (float)imageHeight * scale * 0.5f;
 
-                imageSprite.setPosition(videoMode.width - (wCX - iCX), wCY - iCY);
+                imageSprite.setPosition(wCX + iCX, wCY - iCY);
 
                 if (templateEnabled && templateLoaded) {
                     float foCX = (float)finalOverlayOffsetX + (float)finalOverlayOffsetW / 2.0f;
@@ -375,7 +408,7 @@ void BoothGui::renderThread() {
                 imageSpriteLiveOverlay.setColor(sf::Color(255, 255, 255, (uint8_t)(a * ac * 255.f)));
                 window.draw(imageSpriteLiveOverlay);
 
-                drawShareButtons(1.0f);
+                drawLivePreviewBar();
             }
         } break;
 
@@ -408,12 +441,14 @@ void BoothGui::renderThread() {
         case STATE_TRANS_FINAL_IMAGE_PRINT: {
             float t   = stateTimer.getElapsedTime().asMilliseconds();
             float dur = 350.f;
-            float pct = easeOutSin(std::min(1.0f, t / dur), 0.f, 1.f, 1.f);
 
             window.draw(finalImageSprite);
             if (templateEnabled && templateLoaded) window.draw(imageSpriteFinalOverlay);
 
-            drawShareButtons(pct);
+            // Keep buttons fully visible during this transition
+            // (they were visible in STATE_FINAL_IMAGE and stay visible
+            // in STATE_FINAL_IMAGE_PRINT).
+            drawShareButtons(1.0f);
 
             if (t >= dur) setState(STATE_FINAL_IMAGE_PRINT);
         } break;
@@ -519,6 +554,56 @@ void BoothGui::initialized() {
     } else {
         setState(STATE_TRANS_PREV2_PREV3);
     }
+}
+
+// --- drawLivePreviewBar (camera trigger + fertig in live preview) ----------
+void BoothGui::drawLivePreviewBar()
+{
+    float winW = (float)window.getSize().x;
+    float winH = (float)window.getSize().y;
+    float barH = 120.f;
+    float barY = winH - barH;
+    uint8_t alpha = 220;
+
+    sf::RectangleShape bar(sf::Vector2f(winW, barH + 2.f));
+    bar.setFillColor(sf::Color(12, 12, 20, alpha));
+    bar.setPosition(0, barY);
+    window.draw(bar);
+
+    float btnH = 68.f;
+    float btnY = barY + (barH - btnH) / 2.0f;
+
+    // "Foto machen" trigger button (left of center)
+    float triggerW = 240.f;
+    float triggerX = winW / 2.0f - triggerW - 20.f;
+    drawRoundedRect(window, triggerX, btnY, triggerW, btnH, 12.f,
+                    sf::Color(200, 60, 60, alpha));
+
+    sf::Text triggerLabel;
+    triggerLabel.setFont(mainFont);
+    triggerLabel.setCharacterSize(32);
+    triggerLabel.setFillColor(sf::Color(255, 255, 255, alpha));
+    triggerLabel.setString(L"Foto!");
+    auto tb = triggerLabel.getLocalBounds();
+    triggerLabel.setPosition(triggerX + (triggerW - tb.width) / 2.f,
+                              btnY + (btnH - tb.height) / 2.f - 4.f);
+    window.draw(triggerLabel);
+
+    // "Fertig" button (right of center)
+    float fertigW = 260.f;
+    float fertigX = winW / 2.0f + 20.f;
+    drawRoundedRect(window, fertigX, btnY, fertigW, btnH, 12.f,
+                    sf::Color(40, 160, 130, alpha));
+
+    sf::Text fertigLabel;
+    fertigLabel.setFont(mainFont);
+    fertigLabel.setCharacterSize(32);
+    fertigLabel.setFillColor(sf::Color(255, 255, 255, alpha));
+    fertigLabel.setString(L"Fertig  >>");
+    auto fb = fertigLabel.getLocalBounds();
+    fertigLabel.setPosition(fertigX + (fertigW - fb.width) / 2.f,
+                             btnY + (btnH - fb.height) / 2.f - 4.f);
+    window.draw(fertigLabel);
 }
 
 // --- drawShareButtons (replaces old print overlay) -------------------------
@@ -900,7 +985,10 @@ void BoothGui::setTemplateEnabled(bool te) { templateEnabled = te; }
 
 // --- cancelPrint / confirmPrint --------------------------------------------
 void BoothGui::cancelPrint() {
-    if (getCurrentGuiState() == STATE_FINAL_IMAGE_PRINT)
+    auto s = getCurrentGuiState();
+    if (s == STATE_FINAL_IMAGE_PRINT ||
+        s == STATE_FINAL_IMAGE ||
+        s == STATE_TRANS_FINAL_IMAGE_PRINT)
         setState(STATE_FINAL_IMAGE_PRINT_CANCELED);
 }
 

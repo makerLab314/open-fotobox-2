@@ -149,6 +149,7 @@ namespace selfomat {
             float easeOutSin(float t, float b, float c, float d);
 
             void drawShareButtons(float percentage = 1.0f);
+            void drawLivePreviewBar();
             void drawShareQR(float alpha = 1.0f);
             void drawAlerts();
             void drawAgreement(float alpha = 1);
@@ -158,6 +159,7 @@ namespace selfomat {
 
             bool isFertigButton(int mouseX, int mouseY);
             bool isNochmalButton(int mouseX, int mouseY);
+            bool isInButtonBar(int mouseY);
 
             void generateQRTextures();
 #ifdef HAVE_QRENCODE
