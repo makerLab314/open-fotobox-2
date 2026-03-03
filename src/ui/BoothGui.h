@@ -235,6 +235,9 @@ namespace selfomat {
                 wifiSSID    = ssid;
                 wifiPassword = password;
                 shareUrl    = url;
+                // Invalidate cached QR textures so they are regenerated
+                qrWifiReady = false;
+                qrUrlReady  = false;
             }
 
             ~BoothGui();

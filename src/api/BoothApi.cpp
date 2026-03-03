@@ -915,7 +915,26 @@ bool BoothApi::start() {
                     res.set_status(301);
                     res.set_header("Location", "/app/index.html");
                 } else {
-                    ifstream f("./app/" + file, ios::in);
+                    // Determine Content-Type from file extension
+                    std::string contentType = "application/octet-stream";
+                    auto dotPos = file.rfind('.');
+                    if (dotPos != std::string::npos) {
+                        std::string ext = file.substr(dotPos);
+                        if (ext == ".js")        contentType = "application/javascript";
+                        else if (ext == ".css")   contentType = "text/css";
+                        else if (ext == ".html")  contentType = "text/html";
+                        else if (ext == ".json")  contentType = "application/json";
+                        else if (ext == ".png")   contentType = "image/png";
+                        else if (ext == ".svg")   contentType = "image/svg+xml";
+                        else if (ext == ".jpg" || ext == ".jpeg") contentType = "image/jpeg";
+                        else if (ext == ".woff")  contentType = "font/woff";
+                        else if (ext == ".woff2") contentType = "font/woff2";
+                        else if (ext == ".ttf")   contentType = "font/ttf";
+                        else if (ext == ".ico")   contentType = "image/x-icon";
+                    }
+                    res.set_header("Content-Type", contentType);
+
+                    ifstream f("./app/" + file, ios::in | ios::binary);
                     string file_contents{istreambuf_iterator<char>(f), istreambuf_iterator<char>()};
 
                     res.set_status(200);
@@ -947,18 +966,30 @@ bool BoothApi::start() {
 <title>FotoBox – Fotos herunterladen</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:#111;color:#eee;font-family:sans-serif;padding:20px}
-  h1{text-align:center;margin-bottom:20px;font-size:1.6rem;color:#fff}
-  .grid{display:flex;flex-wrap:wrap;gap:14px;justify-content:center}
-  .card{background:#222;border-radius:12px;overflow:hidden;width:180px;text-align:center}
-  .card img{width:100%;display:block}
-  .card a{display:block;padding:8px;color:#7dcfb6;text-decoration:none;font-size:.8rem;word-break:break-all}
+  body{background:linear-gradient(135deg,#0e0e16 0%,#1a1a2e 100%);color:#eee;font-family:'Segoe UI',system-ui,sans-serif;padding:20px;min-height:100vh}
+  h1{text-align:center;margin:24px 0 8px;font-size:2rem;color:#fff;font-weight:700;letter-spacing:-.5px}
+  .subtitle{text-align:center;color:#64d2b4;font-size:1rem;margin-bottom:28px;font-weight:500}
+  .grid{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;padding:0 8px}
+  .card{background:rgba(30,30,46,.85);border-radius:16px;overflow:hidden;width:200px;text-align:center;
+        transition:transform .2s,box-shadow .2s;border:1px solid rgba(100,210,180,.1);
+        box-shadow:0 4px 20px rgba(0,0,0,.3)}
+  .card:hover{transform:translateY(-4px);box-shadow:0 8px 32px rgba(100,210,180,.15)}
+  .card img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:#111}
+  .card a{display:block;padding:10px 12px;color:#64d2b4;text-decoration:none;font-size:.78rem;
+          word-break:break-all;font-weight:500;transition:color .2s}
   .card a:hover{color:#fff}
-  #msg{text-align:center;margin-top:40px;color:#888}
+  #msg{text-align:center;margin-top:60px;color:#666;font-size:1.1rem}
+  .top-bar{width:100%;height:4px;background:linear-gradient(90deg,#64d2b4,#3ea889);border-radius:2px;margin-bottom:8px}
+  .dl-all{display:block;margin:0 auto 24px;padding:12px 32px;background:#28a882;color:#fff;
+          border:none;border-radius:12px;font-size:1rem;cursor:pointer;font-weight:600;
+          transition:background .2s}
+  .dl-all:hover{background:#33c79a}
 </style>
 </head>
 <body>
-<h1>&#128247; FotoBox Fotos</h1>
+<div class="top-bar"></div>
+<h1>FotoBox</h1>
+<p class="subtitle">Deine Fotos zum Herunterladen</p>
 <div class="grid" id="grid"></div>
 <p id="msg">Lade Fotos&#8230;</p>
 <script>

@@ -43,8 +43,15 @@ bool BoothLogic::start() {
     // Set share info (WiFi QR + download URL) for the GUI
     std::string localIP = getLocalIP();
     std::string shareUrl = "http://" + localIP + ":9080/gallery";
+
+    // Generate a fresh random password for this session and start the hotspot
+    wifiPassword = generateRandomPassword(8);
     gui->setShareInfo(wifiSSID, wifiPassword, shareUrl);
     LOG_I(TAG, "Share URL: " + shareUrl);
+    LOG_I(TAG, "WiFi password for this session: " + wifiPassword);
+
+    // Start (or restart) the system hotspot with the new password
+    restartHotspot(wifiPassword);
 
     LOG_D(TAG, "Initializing Image Processor");
     if (!imageProcessor.start())
@@ -1037,4 +1044,59 @@ std::string BoothLogic::getLocalIP() const {
     }
     freeifaddrs(ifap);
     return result;
+}
+
+std::string BoothLogic::generateRandomPassword(int length) {
+    static const char digits[] = "0123456789";
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dist(0, 9);
+    std::string password;
+    password.reserve(length);
+    for (int i = 0; i < length; i++) {
+        password += digits[dist(gen)];
+    }
+    return password;
+}
+
+void BoothLogic::restartHotspot(const std::string &password) {
+    LOG_I(TAG, "Restarting hotspot with new credentials");
+    // Delete old connection (ignore errors if it doesn't exist)
+    std::system("sudo nmcli connection delete FotoBoxHotspot 2>/dev/null");
+    // Disconnect wlan0
+    std::system("sudo nmcli device disconnect wlan0 2>/dev/null");
+    // Create new hotspot connection
+    std::system("sudo nmcli connection add type wifi ifname wlan0 con-name FotoBoxHotspot "
+                "autoconnect yes ssid FotoBox mode ap");
+    // Configure with password and settings
+    std::string modifyCmd = "sudo nmcli connection modify FotoBoxHotspot "
+                            "802-11-wireless.band bg ipv4.method shared "
+                            "wifi-sec.key-mgmt wpa-psk wifi-sec.psk \"" + password + "\"";
+    std::system(modifyCmd.c_str());
+    // Bring up the hotspot
+    int ret = std::system("sudo nmcli connection up FotoBoxHotspot");
+    if (ret != 0) {
+        LOG_E(TAG, "Failed to start hotspot (nmcli returned ", std::to_string(ret) + ")");
+    } else {
+        LOG_I(TAG, "Hotspot started successfully");
+    }
+}
+
+void BoothLogic::rotateHotspotCredentials() {
+    std::string newPassword = generateRandomPassword(8);
+    LOG_I(TAG, "Rotating hotspot credentials. New password: " + newPassword);
+    wifiPassword = newPassword;
+
+    // Update GUI share info with new password
+    std::string localIP = getLocalIP();
+    std::string shareUrl = "http://" + localIP + ":9080/gallery";
+    gui->setShareInfo(wifiSSID, wifiPassword, shareUrl);
+
+    // Restart the system hotspot with the new password
+    restartHotspot(newPassword);
+}
+
+void BoothLogic::onSessionEnd() {
+    LOG_I(TAG, "Session ended, rotating hotspot credentials");
+    rotateHotspotCredentials();
 }

@@ -96,10 +96,10 @@ void BoothGui::generateQRTextures()
 bool BoothGui::isFertigButton(int mx, int my)
 {
     float winH = (float)window.getSize().y;
-    float btnW = 260.f, btnH = 68.f;
-    float barH = 120.f;
-    float btnX = window.getSize().x / 2.0f + 20.f;
-    float btnY = winH - barH + (barH - btnH) / 2.f;
+    float btnW = 260.f, btnH = 72.f;
+    float barH = 130.f;
+    float btnX = window.getSize().x / 2.0f + 24.f;
+    float btnY = winH - barH + 4.f + (barH - 4.f - btnH) / 2.f;
     return mx >= btnX && mx <= btnX + btnW &&
            my >= btnY && my <= btnY + btnH;
 }
@@ -107,10 +107,10 @@ bool BoothGui::isFertigButton(int mx, int my)
 bool BoothGui::isNochmalButton(int mx, int my)
 {
     float winH = (float)window.getSize().y;
-    float btnW = 240.f, btnH = 68.f;
-    float barH = 120.f;
-    float btnX = window.getSize().x / 2.0f - btnW - 20.f;
-    float btnY = winH - barH + (barH - btnH) / 2.f;
+    float btnW = 260.f, btnH = 72.f;
+    float barH = 130.f;
+    float btnX = window.getSize().x / 2.0f - btnW - 24.f;
+    float btnY = winH - barH + 4.f + (barH - 4.f - btnH) / 2.f;
     return mx >= btnX && mx <= btnX + btnW &&
            my >= btnY && my <= btnY + btnH;
 }
@@ -118,7 +118,7 @@ bool BoothGui::isNochmalButton(int mx, int my)
 bool BoothGui::isInButtonBar(int my)
 {
     float winH = (float)window.getSize().y;
-    float barH = 120.f;
+    float barH = 130.f;
     return my >= (winH - barH);
 }
 
@@ -230,14 +230,22 @@ void BoothGui::renderThread() {
     settings.minorVersion = 1;
     auto style = fullscreen ? sf::Style::Fullscreen : sf::Style::Default;
 
+    // Always use the true desktop mode for fullscreen to guarantee
+    // the native resolution is selected (avoids the "quarter of the screen" bug).
+    if (fullscreen)
+        videoMode = sf::VideoMode::getDesktopMode();
+
     window.create(videoMode, "FotoBox", style, settings);
     window.setVerticalSyncEnabled(true);
     window.setFramerateLimit(60);
+    if (fullscreen)
+        window.setMouseCursorVisible(false);
 
     // Ensure the view matches the actual window size so that drawing
     // coordinates and mouse-event pixel coordinates use the same space.
     {
         auto ws = window.getSize();
+        videoMode = sf::VideoMode(ws.x, ws.y);
         sf::View view(sf::FloatRect(0, 0, (float)ws.x, (float)ws.y));
         window.setView(view);
         // Re-create rect_overlay with the real window dimensions
@@ -305,8 +313,9 @@ void BoothGui::renderThread() {
                     logicController->acceptAgreement();
 
                 } else if (state == STATE_SHARE_QR) {
-                    // Tap anywhere on QR screen -> back to live preview
+                    // Tap anywhere on QR screen -> session ends, rotate credentials
                     shouldShowQR = false;
+                    logicController->onSessionEnd();
                     setState(STATE_TRANS_PREV2_PREV3);
 
                 } else if (state == STATE_FINAL_IMAGE_PRINT ||
@@ -565,48 +574,72 @@ void BoothGui::drawLivePreviewBar()
 {
     float winW = (float)window.getSize().x;
     float winH = (float)window.getSize().y;
-    float barH = 120.f;
+    float barH = 130.f;
     float barY = winH - barH;
-    uint8_t alpha = 220;
+    uint8_t alpha = 230;
 
-    sf::RectangleShape bar(sf::Vector2f(winW, barH + 2.f));
-    bar.setFillColor(sf::Color(12, 12, 20, alpha));
-    bar.setPosition(0, barY);
+    // Gradient-style bar: darker at bottom
+    sf::RectangleShape barTop(sf::Vector2f(winW, 4.f));
+    barTop.setFillColor(sf::Color(100, 210, 180, (uint8_t)(alpha * 0.4f)));
+    barTop.setPosition(0, barY);
+    window.draw(barTop);
+
+    sf::RectangleShape bar(sf::Vector2f(winW, barH));
+    bar.setFillColor(sf::Color(10, 10, 18, alpha));
+    bar.setPosition(0, barY + 4.f);
     window.draw(bar);
 
-    float btnH = 68.f;
-    float btnY = barY + (barH - btnH) / 2.0f;
+    float btnH = 72.f;
+    float btnY = barY + 4.f + (barH - 4.f - btnH) / 2.0f;
 
-    // "Foto machen" trigger button (left of center)
-    float triggerW = 240.f;
-    float triggerX = winW / 2.0f - triggerW - 20.f;
-    drawRoundedRect(window, triggerX, btnY, triggerW, btnH, 12.f,
-                    sf::Color(200, 60, 60, alpha));
+    // "Foto!" trigger button (left of center) - prominent red with glow
+    float triggerW = 260.f;
+    float triggerX = winW / 2.0f - triggerW - 24.f;
+
+    // Button shadow
+    drawRoundedRect(window, triggerX + 3.f, btnY + 4.f, triggerW, btnH, 14.f,
+                    sf::Color(0, 0, 0, (uint8_t)(alpha * 0.4f)));
+    // Button body
+    drawRoundedRect(window, triggerX, btnY, triggerW, btnH, 14.f,
+                    sf::Color(220, 55, 55, alpha));
+    // Inner highlight
+    drawRoundedRect(window, triggerX + 2.f, btnY + 2.f, triggerW - 4.f, btnH * 0.45f, 12.f,
+                    sf::Color(255, 100, 100, (uint8_t)(alpha * 0.25f)));
 
     sf::Text triggerLabel;
     triggerLabel.setFont(mainFont);
-    triggerLabel.setCharacterSize(32);
+    triggerLabel.setCharacterSize(36);
     triggerLabel.setFillColor(sf::Color(255, 255, 255, alpha));
+    triggerLabel.setStyle(sf::Text::Bold);
     triggerLabel.setString(L"Foto!");
     auto tb = triggerLabel.getLocalBounds();
     triggerLabel.setPosition(triggerX + (triggerW - tb.width) / 2.f,
-                              btnY + (btnH - tb.height) / 2.f - 4.f);
+                              btnY + (btnH - tb.height) / 2.f - 6.f);
     window.draw(triggerLabel);
 
-    // "Fertig" button (right of center)
+    // "Fertig >>" button (right of center) - teal
     float fertigW = 260.f;
-    float fertigX = winW / 2.0f + 20.f;
-    drawRoundedRect(window, fertigX, btnY, fertigW, btnH, 12.f,
-                    sf::Color(40, 160, 130, alpha));
+    float fertigX = winW / 2.0f + 24.f;
+
+    // Button shadow
+    drawRoundedRect(window, fertigX + 3.f, btnY + 4.f, fertigW, btnH, 14.f,
+                    sf::Color(0, 0, 0, (uint8_t)(alpha * 0.4f)));
+    // Button body
+    drawRoundedRect(window, fertigX, btnY, fertigW, btnH, 14.f,
+                    sf::Color(35, 155, 125, alpha));
+    // Inner highlight
+    drawRoundedRect(window, fertigX + 2.f, btnY + 2.f, fertigW - 4.f, btnH * 0.45f, 12.f,
+                    sf::Color(80, 200, 170, (uint8_t)(alpha * 0.2f)));
 
     sf::Text fertigLabel;
     fertigLabel.setFont(mainFont);
-    fertigLabel.setCharacterSize(32);
+    fertigLabel.setCharacterSize(34);
     fertigLabel.setFillColor(sf::Color(255, 255, 255, alpha));
-    fertigLabel.setString(L"Fertig  >>");
+    fertigLabel.setStyle(sf::Text::Bold);
+    fertigLabel.setString(L"Fertig  \x00BB");
     auto fb = fertigLabel.getLocalBounds();
     fertigLabel.setPosition(fertigX + (fertigW - fb.width) / 2.f,
-                             btnY + (btnH - fb.height) / 2.f - 4.f);
+                             btnY + (btnH - fb.height) / 2.f - 6.f);
     window.draw(fertigLabel);
 }
 
@@ -614,51 +647,69 @@ void BoothGui::drawLivePreviewBar()
 void BoothGui::drawShareButtons(float percentage)
 {
     if (percentage <= 0.f) return;
-    auto alpha = (uint8_t)(std::min(1.0f, percentage) * 220.f);
+    auto alpha = (uint8_t)(std::min(1.0f, percentage) * 230.f);
 
     float winW = (float)window.getSize().x;
     float winH = (float)window.getSize().y;
-    float barH = 120.f;
+    float barH = 130.f;
     float barY = winH - barH * std::min(1.0f, percentage);
 
-    sf::RectangleShape bar(sf::Vector2f(winW, barH + 2.f));
-    bar.setFillColor(sf::Color(12, 12, 20, alpha));
-    bar.setPosition(0, barY);
+    // Accent line at top
+    sf::RectangleShape barTop(sf::Vector2f(winW, 4.f));
+    barTop.setFillColor(sf::Color(100, 210, 180, (uint8_t)(alpha * 0.4f)));
+    barTop.setPosition(0, barY);
+    window.draw(barTop);
+
+    sf::RectangleShape bar(sf::Vector2f(winW, barH));
+    bar.setFillColor(sf::Color(10, 10, 18, alpha));
+    bar.setPosition(0, barY + 4.f);
     window.draw(bar);
 
-    float btnH     = 68.f;
-    float btnY     = barY + (barH - btnH) / 2.0f;
+    float btnH     = 72.f;
+    float btnY     = barY + 4.f + (barH - 4.f - btnH) / 2.0f;
 
-    // "Nochmal" button (left of center)
-    float nochmalW = 240.f;
-    float nochmalX = winW / 2.0f - nochmalW - 20.f;
-    drawRoundedRect(window, nochmalX, btnY, nochmalW, btnH, 12.f,
-                    sf::Color(50, 55, 65, alpha));
+    // "Nochmal" button (left of center) - subtle dark style
+    float nochmalW = 260.f;
+    float nochmalX = winW / 2.0f - nochmalW - 24.f;
+
+    drawRoundedRect(window, nochmalX + 3.f, btnY + 4.f, nochmalW, btnH, 14.f,
+                    sf::Color(0, 0, 0, (uint8_t)(alpha * 0.3f)));
+    drawRoundedRect(window, nochmalX, btnY, nochmalW, btnH, 14.f,
+                    sf::Color(55, 58, 72, alpha));
+    drawRoundedRect(window, nochmalX + 2.f, btnY + 2.f, nochmalW - 4.f, btnH * 0.45f, 12.f,
+                    sf::Color(80, 85, 100, (uint8_t)(alpha * 0.2f)));
 
     sf::Text nochmalLabel;
     nochmalLabel.setFont(mainFont);
-    nochmalLabel.setCharacterSize(32);
-    nochmalLabel.setFillColor(sf::Color(200, 200, 210, alpha));
+    nochmalLabel.setCharacterSize(34);
+    nochmalLabel.setFillColor(sf::Color(210, 210, 220, alpha));
+    nochmalLabel.setStyle(sf::Text::Bold);
     nochmalLabel.setString(L"Nochmal");
     auto nb = nochmalLabel.getLocalBounds();
     nochmalLabel.setPosition(nochmalX + (nochmalW - nb.width) / 2.f,
-                              btnY + (btnH - nb.height) / 2.f - 4.f);
+                              btnY + (btnH - nb.height) / 2.f - 6.f);
     window.draw(nochmalLabel);
 
     // "Fertig" button (right of center)
     float fertigW = 260.f;
-    float fertigX = winW / 2.0f + 20.f;
-    drawRoundedRect(window, fertigX, btnY, fertigW, btnH, 12.f,
-                    sf::Color(40, 160, 130, alpha));
+    float fertigX = winW / 2.0f + 24.f;
+
+    drawRoundedRect(window, fertigX + 3.f, btnY + 4.f, fertigW, btnH, 14.f,
+                    sf::Color(0, 0, 0, (uint8_t)(alpha * 0.4f)));
+    drawRoundedRect(window, fertigX, btnY, fertigW, btnH, 14.f,
+                    sf::Color(35, 155, 125, alpha));
+    drawRoundedRect(window, fertigX + 2.f, btnY + 2.f, fertigW - 4.f, btnH * 0.45f, 12.f,
+                    sf::Color(80, 200, 170, (uint8_t)(alpha * 0.2f)));
 
     sf::Text fertigLabel;
     fertigLabel.setFont(mainFont);
-    fertigLabel.setCharacterSize(32);
+    fertigLabel.setCharacterSize(34);
     fertigLabel.setFillColor(sf::Color(255, 255, 255, alpha));
-    fertigLabel.setString(L"Fertig  >>");
+    fertigLabel.setStyle(sf::Text::Bold);
+    fertigLabel.setString(L"Fertig  \x00BB");
     auto fb = fertigLabel.getLocalBounds();
     fertigLabel.setPosition(fertigX + (fertigW - fb.width) / 2.f,
-                             btnY + (btnH - fb.height) / 2.f - 4.f);
+                             btnY + (btnH - fb.height) / 2.f - 6.f);
     window.draw(fertigLabel);
 }
 
@@ -669,114 +720,193 @@ void BoothGui::drawShareQR(float alpha)
     float winW = (float)window.getSize().x;
     float winH = (float)window.getSize().y;
 
+    // Full-screen dark background
     sf::RectangleShape bg(sf::Vector2f(winW, winH));
-    bg.setFillColor(sf::Color(12, 12, 20, a8));
+    bg.setFillColor(sf::Color(14, 14, 22, a8));
     window.draw(bg);
+
+    // Decorative accent line at the very top
+    sf::RectangleShape topAccent(sf::Vector2f(winW, 5.f));
+    topAccent.setFillColor(sf::Color(100, 210, 180, (uint8_t)(alpha * 200.f)));
+    window.draw(topAccent);
 
     // Title
     sf::Text title;
     title.setFont(mainFont);
-    title.setCharacterSize(54);
-    title.setFillColor(sf::Color(240, 240, 245, a8));
+    title.setCharacterSize(52);
+    title.setFillColor(sf::Color(255, 255, 255, a8));
+    title.setStyle(sf::Text::Bold);
     title.setString(L"Fotos herunterladen");
     auto tbounds = title.getLocalBounds();
-    title.setPosition((winW - tbounds.width) / 2.f, 40.f);
+    title.setPosition((winW - tbounds.width) / 2.f, 35.f);
     window.draw(title);
 
-    float qrSize = 260.f;
-    float cardPad = 24.f;
+    // Subtitle
+    sf::Text subtitle;
+    subtitle.setFont(mainFont);
+    subtitle.setCharacterSize(26);
+    subtitle.setFillColor(sf::Color(150, 150, 170, a8));
+    subtitle.setString(L"Scanne die QR-Codes mit deinem Handy");
+    auto stb = subtitle.getLocalBounds();
+    subtitle.setPosition((winW - stb.width) / 2.f, 95.f);
+    window.draw(subtitle);
+
+    // Card dimensions - responsive to screen size
+    float qrSize  = std::min(280.f, winH * 0.32f);
+    float cardPad = 28.f;
     float cardW   = qrSize + 2.f * cardPad;
-    float cardH   = qrSize + 2.f * cardPad + 80.f;
-    float gap     = 80.f;
+    float cardH   = qrSize + 2.f * cardPad + 110.f;
+    float gap     = 60.f;
     float totalW  = 2.f * cardW + gap;
     float startX  = (winW - totalW) / 2.f;
-    float cardY   = 130.f;
+    float cardY   = 145.f;
 
-    // WiFi QR card
+    // Helper lambda for drawing a numbered step badge
+    auto drawStepBadge = [&](float cx, float cy, const wchar_t *num) {
+        float badgeR = 22.f;
+        sf::CircleShape badge(badgeR);
+        badge.setFillColor(sf::Color(100, 210, 180, a8));
+        badge.setPosition(cx - badgeR, cy - badgeR);
+        window.draw(badge);
+
+        sf::Text numText;
+        numText.setFont(mainFont);
+        numText.setCharacterSize(26);
+        numText.setFillColor(sf::Color(14, 14, 22, a8));
+        numText.setStyle(sf::Text::Bold);
+        numText.setString(num);
+        auto nb = numText.getLocalBounds();
+        numText.setPosition(cx - nb.width / 2.f - nb.left, cy - nb.height / 2.f - nb.top);
+        window.draw(numText);
+    };
+
+    // ── Card 1: WiFi QR ──────────────────────────────────────
     {
+        float cx = startX + cardW / 2.f;
+
         // Drop shadow
-        float sOff = 6.f;
-        uint8_t sAlpha = (uint8_t)(alpha * 120.f);
-        drawRoundedRect(window, startX + sOff, cardY + sOff, cardW, cardH, 16.f,
-                        sf::Color(0, 0, 0, sAlpha));
+        drawRoundedRect(window, startX + 5.f, cardY + 6.f, cardW, cardH, 18.f,
+                        sf::Color(0, 0, 0, (uint8_t)(alpha * 100.f)));
+        // Card background
+        drawRoundedRect(window, startX, cardY, cardW, cardH, 18.f,
+                        sf::Color(26, 28, 40, a8));
+        // Subtle top border accent
+        drawRoundedRect(window, startX, cardY, cardW, 4.f, 2.f,
+                        sf::Color(100, 210, 180, (uint8_t)(alpha * 120.f)));
 
-        drawRoundedRect(window, startX, cardY, cardW, cardH, 16.f,
-                        sf::Color(30, 32, 44, a8));
+        // Step badge
+        drawStepBadge(startX + 30.f, cardY + 30.f, L"1");
 
+        // Card title
         sf::Text label;
         label.setFont(mainFont);
-        label.setCharacterSize(28);
+        label.setCharacterSize(26);
         label.setFillColor(sf::Color(100, 210, 180, a8));
+        label.setStyle(sf::Text::Bold);
         label.setString(L"WLAN beitreten");
         auto lb = label.getLocalBounds();
-        label.setPosition(startX + (cardW - lb.width) / 2.f, cardY + 12.f);
+        label.setPosition(cx - lb.width / 2.f + 10.f, cardY + 14.f);
         window.draw(label);
+
+        float qrY = cardY + 56.f;
+
+        // QR code with white background + rounded border
+        drawRoundedRect(window, startX + cardPad - 6.f, qrY - 6.f,
+                        qrSize + 12.f, qrSize + 12.f, 8.f,
+                        sf::Color(255, 255, 255, a8));
 
 #ifdef HAVE_QRENCODE
         if (qrWifiReady) {
             float qrRatio = qrSize / (float)qrWifiTexture.getSize().x;
             sf::Sprite qrSprite(qrWifiTexture);
             qrSprite.setScale(qrRatio, qrRatio);
-            qrSprite.setPosition(startX + cardPad, cardY + cardPad + 44.f);
+            qrSprite.setPosition(startX + cardPad, qrY);
             qrSprite.setColor(sf::Color(255, 255, 255, a8));
             window.draw(qrSprite);
         } else {
 #endif
             sf::RectangleShape ph(sf::Vector2f(qrSize, qrSize));
             ph.setFillColor(sf::Color(255, 255, 255, a8));
-            ph.setPosition(startX + cardPad, cardY + cardPad + 44.f);
+            ph.setPosition(startX + cardPad, qrY);
             window.draw(ph);
 #ifdef HAVE_QRENCODE
         }
 #endif
 
-        sf::Text ssidText;
-        ssidText.setFont(hackFont);
-        ssidText.setCharacterSize(20);
-        ssidText.setFillColor(sf::Color(200, 200, 215, a8));
-        std::string wifiLine = wifiSSID.empty() ? "(kein WLAN konfiguriert)" : wifiSSID;
-        if (!wifiPassword.empty()) wifiLine += "\nPW: " + wifiPassword;
-        ssidText.setString(wifiLine);
-        auto sb = ssidText.getLocalBounds();
-        ssidText.setPosition(startX + (cardW - sb.width) / 2.f,
-                             cardY + cardPad + 44.f + qrSize + 8.f);
-        window.draw(ssidText);
+        // SSID label
+        sf::Text ssidLabel;
+        ssidLabel.setFont(mainFont);
+        ssidLabel.setCharacterSize(20);
+        ssidLabel.setFillColor(sf::Color(160, 160, 180, a8));
+        std::string ssidStr = wifiSSID.empty() ? "(kein WLAN)" : "WLAN: " + wifiSSID;
+        ssidLabel.setString(ssidStr);
+        auto slb = ssidLabel.getLocalBounds();
+        ssidLabel.setPosition(cx - slb.width / 2.f, qrY + qrSize + 12.f);
+        window.draw(ssidLabel);
+
+        // Password in larger, highlighted text
+        if (!wifiPassword.empty()) {
+            sf::Text pwLabel;
+            pwLabel.setFont(hackFont);
+            pwLabel.setCharacterSize(24);
+            pwLabel.setFillColor(sf::Color(255, 255, 255, a8));
+            pwLabel.setStyle(sf::Text::Bold);
+            pwLabel.setString("PW: " + wifiPassword);
+            auto pb = pwLabel.getLocalBounds();
+            pwLabel.setPosition(cx - pb.width / 2.f, qrY + qrSize + 38.f);
+            window.draw(pwLabel);
+        }
     }
 
-    // Download URL QR card
+    // ── Card 2: Download URL QR ──────────────────────────────
     float card2X = startX + cardW + gap;
     {
+        float cx = card2X + cardW / 2.f;
+
         // Drop shadow
-        float sOff = 6.f;
-        uint8_t sAlpha = (uint8_t)(alpha * 120.f);
-        drawRoundedRect(window, card2X + sOff, cardY + sOff, cardW, cardH, 16.f,
-                        sf::Color(0, 0, 0, sAlpha));
+        drawRoundedRect(window, card2X + 5.f, cardY + 6.f, cardW, cardH, 18.f,
+                        sf::Color(0, 0, 0, (uint8_t)(alpha * 100.f)));
+        // Card background
+        drawRoundedRect(window, card2X, cardY, cardW, cardH, 18.f,
+                        sf::Color(26, 28, 40, a8));
+        // Subtle top border accent
+        drawRoundedRect(window, card2X, cardY, cardW, 4.f, 2.f,
+                        sf::Color(100, 210, 180, (uint8_t)(alpha * 120.f)));
 
-        drawRoundedRect(window, card2X, cardY, cardW, cardH, 16.f,
-                        sf::Color(30, 32, 44, a8));
+        // Step badge
+        drawStepBadge(card2X + 30.f, cardY + 30.f, L"2");
 
+        // Card title
         sf::Text label;
         label.setFont(mainFont);
-        label.setCharacterSize(28);
+        label.setCharacterSize(26);
         label.setFillColor(sf::Color(100, 210, 180, a8));
+        label.setStyle(sf::Text::Bold);
         label.setString(L"Fotos laden");
         auto lb = label.getLocalBounds();
-        label.setPosition(card2X + (cardW - lb.width) / 2.f, cardY + 12.f);
+        label.setPosition(cx - lb.width / 2.f + 10.f, cardY + 14.f);
         window.draw(label);
+
+        float qrY = cardY + 56.f;
+
+        // QR code with white background + rounded border
+        drawRoundedRect(window, card2X + cardPad - 6.f, qrY - 6.f,
+                        qrSize + 12.f, qrSize + 12.f, 8.f,
+                        sf::Color(255, 255, 255, a8));
 
 #ifdef HAVE_QRENCODE
         if (qrUrlReady) {
             float qrRatio = qrSize / (float)qrUrlTexture.getSize().x;
             sf::Sprite qrSprite(qrUrlTexture);
             qrSprite.setScale(qrRatio, qrRatio);
-            qrSprite.setPosition(card2X + cardPad, cardY + cardPad + 44.f);
+            qrSprite.setPosition(card2X + cardPad, qrY);
             qrSprite.setColor(sf::Color(255, 255, 255, a8));
             window.draw(qrSprite);
         } else {
 #endif
             sf::RectangleShape ph(sf::Vector2f(qrSize, qrSize));
             ph.setFillColor(sf::Color(255, 255, 255, a8));
-            ph.setPosition(card2X + cardPad, cardY + cardPad + 44.f);
+            ph.setPosition(card2X + cardPad, qrY);
             window.draw(ph);
 #ifdef HAVE_QRENCODE
         }
@@ -793,19 +923,21 @@ void BoothGui::drawShareQR(float alpha)
             urlText.setCharacterSize(14);
             ub = urlText.getLocalBounds();
         }
-        urlText.setPosition(card2X + (cardW - ub.width) / 2.f,
-                            cardY + cardPad + 44.f + qrSize + 8.f);
+        urlText.setPosition(cx - ub.width / 2.f, qrY + qrSize + 20.f);
         window.draw(urlText);
     }
 
-    // Footer hint
+    // ── Footer hint with pulsing animation ───────────────────
+    float t = stateTimer.getElapsedTime().asMilliseconds();
+    float pulse = 0.6f + 0.4f * std::sin(t / 600.f);
+
     sf::Text hint;
     hint.setFont(mainFont);
-    hint.setCharacterSize(26);
-    hint.setFillColor(sf::Color(120, 120, 140, a8));
-    hint.setString(L"Bildschirm beruehren um fortzufahren");
+    hint.setCharacterSize(28);
+    hint.setFillColor(sf::Color(150, 150, 170, (uint8_t)(a8 * pulse)));
+    hint.setString(L"Bildschirm antippen um fortzufahren");
     auto hb = hint.getLocalBounds();
-    hint.setPosition((winW - hb.width) / 2.f, winH - 60.f);
+    hint.setPosition((winW - hb.width) / 2.f, winH - 65.f);
     window.draw(hint);
 }
 

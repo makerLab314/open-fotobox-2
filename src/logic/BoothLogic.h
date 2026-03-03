@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <libgen.h>
+#include <random>
 
 #include <sys/stat.h>
 #include <tools/blocking_reader.h>
@@ -210,6 +211,10 @@ namespace selfomat {
 
             int difftimeSeconds(time_t later, time_t earlier);
 
+            std::string generateRandomPassword(int length = 8);
+            void rotateHotspotCredentials();
+            void restartHotspot(const std::string &password);
+
             timespec triggerStart;
 
             std::list<ImagePrintMetrics> printMetrics;
@@ -298,6 +303,8 @@ namespace selfomat {
             void setLanguageChoice(int choice, bool persist = false);
 
             std::wstring getTranslation(std::string id);
+
+            void onSessionEnd() override;
 
             std::string getImageDir() const { return imageDir; }
             std::string getWifiSSID() const { return wifiSSID; }
